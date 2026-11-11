@@ -1,0 +1,7 @@
+import {test} from 'node:test'; import assert from 'node:assert/strict';
+import {reportPeriod,due} from '../src/scheduler.ts'; import {renderReport} from '../src/report.ts';
+test('daily deliberately uses previous calendar day',()=>{const p=reportPeriod(Date.parse('2026-11-12T15:59:00Z'),'Asia/Shanghai','daily');assert.equal(new Date(p.start).toISOString(),'2026-11-10T16:00:00.000Z');assert.equal(new Date(p.end).toISOString(),'2026-11-11T16:00:00.000Z');});
+test('weekly starts previous Monday',()=>{const p=reportPeriod(Date.parse('2026-11-16T01:00:00Z'),'Asia/Shanghai','weekly');assert.equal(p.startDate,'2026-11-09');assert.equal(p.endDate,'2026-11-16');});
+test('DST interval has real elapsed hours',()=>{const p=reportPeriod(Date.parse('2026-03-09T12:00:00Z'),'America/New_York','daily');assert.equal((p.end-p.start)/3600000,23);});
+test('due checks configured local time and weekday',()=>{const n=Date.parse('2026-11-16T01:00:00Z');assert.equal(due(n,'Asia/Shanghai','09:00','weekly'),true);assert.equal(due(n,'Asia/Shanghai','09:01','weekly'),false);});
+test('zero alerts renders a report and missing data is not called normal',()=>{const a=renderReport('daily','2026-11-11','2026-11-12','Asia/Shanghai',{nodeCount:1,upload:0,download:0,alerts:[],complete:true,pingAverage:20,uptimeRate:1});assert.match(a,/未发现监控异常/);const b=renderReport('weekly','a','b','UTC',{nodeCount:null,upload:null,download:null,alerts:[],complete:false,pingAverage:null,uptimeRate:null});assert.match(b,/数据不足/);assert.doesNotMatch(b,/未发现监控异常/);});
