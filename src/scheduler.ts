@@ -22,12 +22,19 @@ function midnight(d:LocalDate,zone:string):number {
  while(hi-lo>60000){const mid=Math.floor((lo+hi)/120000)*60000;if(dateNumber(mid)<target)lo=mid;else hi=mid;}
  if(dateNumber(hi)!==target)throw Error('Local date does not exist in timezone');return hi;
 }
-export function reportPeriod(now:number,zone:string,type:'daily'|'weekly') {
+/** Last complete day/week, used for aggregation and historical comparisons. */
+export function previousPeriod(now:number,zone:string,type:'daily'|'weekly') {
  const p=parts(now,zone);const today={year:p.year,month:p.month,day:p.day};
  const weekday=new Date(Date.UTC(today.year,today.month-1,today.day)).getUTCDay();
  const end=type==='daily'?today:shift(today,-((weekday+6)%7));
  const start=shift(end,type==='daily'?-1:-7);
  return {start:midnight(start,zone),end:midnight(end,zone),key:`${type}:${zone}:${key(start)}`,startDate:key(start),endDate:key(end)};
+}
+/** Daily reports cover today through now; weekly reports cover the last complete week. */
+export function reportPeriod(now:number,zone:string,type:'daily'|'weekly') {
+ if(type==='weekly')return previousPeriod(now,zone,type);
+ const p=parts(now,zone),date=key({year:p.year,month:p.month,day:p.day});
+ return {...historicalPeriod(date,zone,type),end:now,endDate:date};
 }
 export function due(now:number,zone:string,time:string,type:'daily'|'weekly',weekDay=1) {
  if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)||!Number.isInteger(weekDay)||weekDay<0||weekDay>6) throw new Error('Invalid schedule');
@@ -52,7 +59,8 @@ export function duePeriods(now:number,zone:string,time:string,type:'daily'|'week
   const at= i===0?now:midnight(d,zone)+12*3600000;
   const local=parts(at,zone),weekday=new Date(Date.UTC(local.year,local.month-1,local.day)).getUTCDay();
   if(i===0?!due(at,zone,time,type,weekDay):type==='weekly'&&weekday!==weekDay)continue;
-  const period=reportPeriod(at,zone,type);if(!seen.has(period.key)){out.push(period);seen.add(period.key);}
+  const period=type==='daily'&&i>0?historicalPeriod(key(d),zone,type):reportPeriod(at,zone,type);
+  if(!seen.has(period.key)){if(type==='daily'&&i===0)out.unshift(period);else out.push(period);seen.add(period.key);}
  }
  return out;
 }

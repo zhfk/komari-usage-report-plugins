@@ -10,7 +10,7 @@ function local(time:number,zone:string){return localDateTime(time,zone);}
 export function reportLines(r:Report,c:Config):string[]{
  const alerts=r.events.filter(e=>['Offline','Alert'].includes(e.type));
  const network=r.nodes.flatMap(n=>n.ping.filter(p=>(p.average!==null&&p.average>c.pingAverageMs)||(p.loss!==null&&p.loss>c.pingLossPercent)||(p.max!==null&&p.max>c.pingSingleMs)).map(p=>`${n.name} / ${p.name}`));
- const lines=[`📊 Komari ${r.kind==='daily'?'每日监控日报':'每周监控周报'}`,`📅 ${r.period.startDate} 至 ${r.period.endDate}（不含结束日）`,`🌏 ${c.timezone}`,'',`🖥️ 参与统计：${r.nodes.length} 台`,
+ const lines=[`📊 Komari ${r.kind==='daily'?'每日监控日报':'每周监控周报'}`,`📅 ${local(r.period.start,c.timezone)} 至 ${local(r.period.end,c.timezone)}（不含结束时点）`,`🌏 ${c.timezone}`,'',`🖥️ 参与统计：${r.nodes.length} 台`,
  (alerts.length||network.length)?'⚠️ 发现监控异常或网络阈值超限':r.complete?'✅ 已采集数据未发现监控异常':'⚠️ 数据不足，无法确认全部监控状态'];
  if(c.traffic){const sum=(k:'upload'|'download')=>r.nodes.length&&r.nodes.every(n=>n[k].value!==null)?r.nodes.reduce((a,n)=>a+n[k].value!,0):null;lines.push(`📊 总流量：${bytes(r.total)}`,`⬆️ 上传：${bytes(sum('upload'))}`,`⬇️ 下载：${bytes(sum('download'))}`);}
  if(c.uptime){const online=r.nodes.reduce((a,n)=>a+n.uptime.online,0),offline=r.nodes.reduce((a,n)=>a+n.uptime.offline,0);lines.push(`🟢 综合在线率：${pct(online+offline?online/(online+offline):null)}（观察估算）`);}

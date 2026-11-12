@@ -6,7 +6,7 @@
   "short": "komari-daily-weekly-reports",
   "description": "定时生成监控日报和周报；数据不足明确提示。Beta，真实环境验证待用户完成。",
   "author": "zhfk",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "komari": ">=1.6.1",
   "entry": "script.js",
   "url": "https://github.com/zhfk/komari-usage-report-plugins",

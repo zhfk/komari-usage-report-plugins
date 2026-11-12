@@ -1,5 +1,5 @@
 import {configuration,scope,type Config} from './config.ts';
-import {historicalPeriod,reportPeriod,duePeriods} from './scheduler.ts';
+import {historicalPeriod,reportPeriod,previousPeriod,duePeriods} from './scheduler.ts';
 import {Storage,type Disk} from './storage.ts';import {Collector} from './collector.ts';import {Dispatch} from './dispatch.ts';
 import {normalizeEvents,hash} from './events.ts';import {reportLines,paginate} from './format-report.ts';
 import {safeText,type Period,type Kind,type RecordEntry,type Report,type RPC} from './domain.ts';
@@ -36,7 +36,7 @@ export class App {
   try{const data=fn();if(data!==undefined)this.json(res,data);}catch(e){this.json(res,{error:safeText(e instanceof Error?e.message:'操作失败')},400);}
  }
  fail(e:unknown){this.lastError=safeText(e instanceof Error?e.message:'未知错误');try{this.storage.log(this.lastError);}catch{}console.error(this.lastError);}
- status(){const records=this.storage.records().sort((a,b)=>b.generated-a.generated);return {version:'0.1.0-beta.1',busy:this.busy,lastTick:this.lastTick,lastError:this.lastError,lastGenerated:records[0]?.generated??null,lastAccepted:records.find(x=>x.status==='accepted')?.finished??null,notificationSemantics:'accepted 仅表示 Komari RPC 正常返回；可能被全局禁用或渠道脚本忽略，不保证 Telegram 送达。',records:records.slice(0,100).map(r=>({id:r.id,kind:r.kind,period:r.period,status:r.status,generated:r.generated,finished:r.finished,complete:r.complete,parts:r.parts.map(p=>({state:p.state,attempts:p.attempts,error:p.error})),error:r.error})),logs:this.storage.read('logs.json',[])};}
+ status(){const records=this.storage.records().sort((a,b)=>b.generated-a.generated);return {version:'0.1.0-beta.2',busy:this.busy,lastTick:this.lastTick,lastError:this.lastError,lastGenerated:records[0]?.generated??null,lastAccepted:records.find(x=>x.status==='accepted')?.finished??null,notificationSemantics:'accepted 仅表示 Komari RPC 正常返回；可能被全局禁用或渠道脚本忽略，不保证 Telegram 送达。',records:records.slice(0,100).map(r=>({id:r.id,kind:r.kind,period:r.period,status:r.status,generated:r.generated,finished:r.finished,complete:r.complete,parts:r.parts.map(p=>({state:p.state,attempts:p.attempts,error:p.error})),error:r.error})),logs:this.storage.read('logs.json',[])};}
  enqueue(input:any){
   if(!input||!['preview','send','test','retry'].includes(input.action))throw Error('操作无效');
   if(this.jobs.size>=30){const first=[...this.jobs].find(([,v])=>v.status!=='running'&&v.status!=='queued');if(first)this.jobs.delete(first[0]);else throw Error('任务队列已满');}
@@ -62,8 +62,11 @@ export class App {
   const record=this.dispatch.prepare(report,c,true);await this.dispatch.send(record,c,now);return record;
  }
  async collect(kind:Kind,p:Period,c:Config,now:number):Promise<Report>{
-  const r=await this.collector.collect(kind,p,c,now),key=hash(p.key+scope(c)),totals=this.storage.read<Record<string,{end:number;total:number|null;complete:boolean}>>('totals.json',{});
-  const prev=reportPeriod(p.start,c.timezone,kind);
+  const r=await this.collector.collect(kind,p,c,now);
+  // A live snapshot must not replace a complete day's totals or compare with a longer day.
+  if(kind==='daily'&&p.end<historicalPeriod(p.startDate,c.timezone,'daily').end)return r;
+  const key=hash(p.key+scope(c)),totals=this.storage.read<Record<string,{end:number;total:number|null;complete:boolean}>>('totals.json',{});
+  const prev=previousPeriod(p.start,c.timezone,kind);
   const match=totals[hash(prev.key+scope(c))];if(match?.complete)r.previousTotal=match.total;
   totals[key]={end:p.end,total:r.total,complete:r.complete};for(const [k,v]of Object.entries(totals))if(now-v.end>c.reportDays*86400000)delete totals[k];this.storage.write('totals.json',totals);return r;
  }
@@ -81,8 +84,8 @@ export class App {
      const report=await this.collect(kind,p,c,now);if(this.stopped)break;const record=this.dispatch.prepare(report,c);await this.dispatch.send(record,c,now);remaining--;
     }
    }
-   // Proactively save yesterday even before its intentionally delayed daily send time.
-   const day=reportPeriod(now,c.timezone,'daily'),marker='aggregate.json';
+   // Save the last completed day separately for full-day history and weekly reports.
+   const day=previousPeriod(now,c.timezone,'daily'),marker='aggregate.json';
    if(!this.stopped&&this.storage.read(marker,'')!==day.key+scope(c)&&now-day.end>600000){await this.collect('daily',day,c,now);this.storage.write(marker,day.key+scope(c));}
    this.storage.clean(now,c.eventDays,c.reportDays);this.lastTick=now;
   }finally{this.busy=false;}
