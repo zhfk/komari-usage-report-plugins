@@ -6,7 +6,7 @@
   "short": "komari-daily-weekly-reports",
   "description": "定时生成监控日报和周报；数据不足明确提示。Beta，真实环境验证待用户完成。",
   "author": "zhfk",
-  "version": "0.1.0-beta.2",
+  "version": "0.1.0-beta.3",
   "komari": ">=1.6.1",
   "entry": "script.js",
   "url": "https://github.com/zhfk/komari-usage-report-plugins",
@@ -180,7 +180,7 @@
         "key": "catchupDays",
         "name": "自动追补天数（0–31，每分钟最多两份）",
         "type": "number",
-        "default": 3
+        "default": 0
       },
       {
         "key": "pingAverageMs",
@@ -229,15 +229,11 @@
         "name": "已安装并启用事件转发脚本",
         "type": "switch",
         "default": false
+      },
+      {
+        "type": "textbox",
+        "name": "<!-- KOMARI_REPORTS_CONSOLE -->"
       }
     ]
-  },
-  "pages": [
-    {
-      "file": "pages/admin.html",
-      "title": "监控日报与周报",
-      "type": "iframe",
-      "visibility": "admin"
-    }
-  ]
+  }
 }

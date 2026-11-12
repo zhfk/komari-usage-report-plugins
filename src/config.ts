@@ -2,7 +2,7 @@ export const defaults = {
  dailyEnabled:true, dailyTime:'23:59', weeklyEnabled:true, weeklyTime:'09:00', weeklyDay:1,
  timezone:'Asia/Shanghai', nodeIds:'', includeHidden:false,
  traffic:true,ping:true,uptime:true,offline:true,cpu:true,memory:true,disk:true,load:true,expiry:true,renewal:true,comparison:true,rankings:true,summary:true,
- eventDays:180,reportDays:180,maxEvents:50,retries:3,retrySeconds:60,catchupDays:3,
+ eventDays:180,reportDays:180,maxEvents:50,retries:3,retrySeconds:60,catchupDays:0,
  pingAverageMs:200,pingSingleMs:300,pingLossPercent:5,completeness:true,
  sort:'name',messageLength:2800,eventSecret:'',eventForwarding:false
 };

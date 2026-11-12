@@ -3,12 +3,13 @@ import {historicalPeriod,reportPeriod,previousPeriod,duePeriods} from './schedul
 import {Storage,type Disk} from './storage.ts';import {Collector} from './collector.ts';import {Dispatch} from './dispatch.ts';
 import {normalizeEvents,hash} from './events.ts';import {reportLines,paginate} from './format-report.ts';
 import {safeText,type Period,type Kind,type RecordEntry,type Report,type RPC} from './domain.ts';
-import {timingSafeEqual} from 'node:crypto';import {Buffer} from 'node:buffer';
+import {randomBytes,timingSafeEqual} from 'node:crypto';import {Buffer} from 'node:buffer';
 export const BASE='/api/plugins/komari-daily-weekly-reports';
 export interface Server extends RPC {getConfig():Promise<Record<string,unknown>>;cron(expr:string,fn:()=>void):unknown;route(method:string,path:string,handler:(req:any,res:any)=>unknown):unknown}
 export class App {
  server:Server;storage:Storage;collector:Collector;dispatch:Dispatch;config!:Config;stopped=false;busy=false;lastError='';lastTick:number|null=null;task:Promise<void>|null=null;
  jobs=new Map<string,{status:string;result?:unknown;error?:string}>();queue:Promise<void>=Promise.resolve();
+ csrfToken=randomBytes(32).toString('hex');
  constructor(server:Server,fs:Disk,root:string){this.server=server;this.storage=new Storage(fs,root);this.collector=new Collector(server,this.storage);this.dispatch=new Dispatch(server,this.storage);}
  async load(){
   this.config=configuration(await this.server.getConfig());reportPeriod(Date.now(),this.config.timezone,'daily');
@@ -30,17 +31,20 @@ export class App {
  json(res:any,data:unknown,status=200){res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');res.end(JSON.stringify(data));}
  admin(req:any,res:any,fn:()=>unknown){
   const roles=req.context?.principal?.roles||[];if(!roles.includes('admin')){this.json(res,{error:'需要管理员身份'},403);return;}
-  // Requests with ambient cookies must be same-origin; do not accept cross-site mutations.
-  const origin=req.headers?.origin,host=req.headers?.host;
-  if(req.method==='POST'&&origin){try{if(new URL(origin).host!==host)throw Error();}catch{this.json(res,{error:'跨站请求被拒绝'},403);return;}}
+  // Komari omits Host from plugin request headers; it may also be rewritten by a proxy.
+  // Browser fetch metadata and a per-load token protect cookie-authenticated mutations.
+  const site=this.header(req,'sec-fetch-site');
+  if(site&&site!=='same-origin'&&site!=='none'){this.json(res,{error:'跨站请求被拒绝'},403);return;}
+  if(req.method==='POST'&&!this.secret('Bearer '+this.header(req,'x-komari-reports-csrf'),this.csrfToken)){this.json(res,{error:'请求校验失败，请刷新插件配置后重试'},403);return;}
   try{const data=fn();if(data!==undefined)this.json(res,data);}catch(e){this.json(res,{error:safeText(e instanceof Error?e.message:'操作失败')},400);}
  }
+ header(req:any,name:string):string {const value=Object.entries(req.headers||{}).find(([key])=>key.toLowerCase()===name)?.[1];return typeof value==='string'?value:Array.isArray(value)&&value.length===1&&typeof value[0]==='string'?value[0]:'';}
  fail(e:unknown){this.lastError=safeText(e instanceof Error?e.message:'未知错误');try{this.storage.log(this.lastError);}catch{}console.error(this.lastError);}
- status(){const records=this.storage.records().sort((a,b)=>b.generated-a.generated);return {version:'0.1.0-beta.2',busy:this.busy,lastTick:this.lastTick,lastError:this.lastError,lastGenerated:records[0]?.generated??null,lastAccepted:records.find(x=>x.status==='accepted')?.finished??null,notificationSemantics:'accepted 仅表示 Komari RPC 正常返回；可能被全局禁用或渠道脚本忽略，不保证 Telegram 送达。',records:records.slice(0,100).map(r=>({id:r.id,kind:r.kind,period:r.period,status:r.status,generated:r.generated,finished:r.finished,complete:r.complete,parts:r.parts.map(p=>({state:p.state,attempts:p.attempts,error:p.error})),error:r.error})),logs:this.storage.read('logs.json',[])};}
+ status(){const records=this.storage.records().sort((a,b)=>b.generated-a.generated);return {version:'0.1.0-beta.3',csrfToken:this.csrfToken,busy:this.busy,lastTick:this.lastTick,lastError:this.lastError,lastGenerated:records[0]?.generated??null,lastAccepted:records.find(x=>x.status==='accepted')?.finished??null,notificationSemantics:'accepted 仅表示 Komari RPC 正常返回；可能被全局禁用或渠道脚本忽略，不保证 Telegram 送达。',records:records.slice(0,100).map(r=>({id:r.id,kind:r.kind,period:r.period,status:r.status,generated:r.generated,finished:r.finished,complete:r.complete,parts:r.parts.map(p=>({state:p.state,attempts:p.attempts,error:p.error})),error:r.error})),logs:this.storage.read('logs.json',[])};}
  enqueue(input:any){
-  if(!input||!['preview','send','test','retry'].includes(input.action))throw Error('操作无效');
+  if(!input||!['preview','send','sendToday','test','retry'].includes(input.action))throw Error('操作无效');
   if(this.jobs.size>=30){const first=[...this.jobs].find(([,v])=>v.status!=='running'&&v.status!=='queued');if(first)this.jobs.delete(first[0]);else throw Error('任务队列已满');}
-  if(input.action!=='test'&&input.action!=='retry'&&(!['daily','weekly'].includes(input.kind)||typeof input.date!=='string'))throw Error('请选择报表类型和历史日期');
+  if(!['test','retry','sendToday'].includes(input.action)&&(!['daily','weekly'].includes(input.kind)||typeof input.date!=='string'))throw Error('请选择报表类型和历史日期');
   const id=hash(Date.now()+':'+Math.random());this.jobs.set(id,{status:'queued'});
   this.queue=this.queue.then(async()=>{if(this.stopped){this.jobs.set(id,{status:'failed',error:'插件已停止'});return;}this.jobs.set(id,{status:'running'});try{const c=configuration(await this.server.getConfig());const result=await this.action(input,c);this.jobs.set(id,{status:'completed',result});}catch(e){this.fail(e);this.jobs.set(id,{status:'failed',error:this.lastError});}});
   return {id};
@@ -56,8 +60,9 @@ export class App {
    if(r.parts.some(p=>p.state==='unknown'||p.state==='sending')&&input.confirmDuplicateRisk!==true)throw Error('请先核实未知结果并确认重复发送风险');
    for(const p of r.parts)if(p.state!=='accepted'){p.state='pending';p.nextAt=0;p.attempts=0;}r.status='ready';this.storage.record(r);return this.dispatch.send(r,c,now);
   }
-  const p=historicalPeriod(input.date,c.timezone,input.kind);if(p.end>now)throw Error('只能生成完整的历史周期');if(now-p.start>730*86400000)throw Error('历史范围超出 730 天');
-  const report=await this.collect(input.kind,p,c,now),parts=paginate(reportLines(report,c),c.messageLength);
+  const today=input.action==='sendToday',kind:Kind=today?'daily':input.kind;
+  const p=today?reportPeriod(now,c.timezone,'daily'):historicalPeriod(input.date,c.timezone,kind);if(p.end>now)throw Error('只能生成完整的历史周期');if(now-p.start>730*86400000)throw Error('历史范围超出 730 天');
+  const report=await this.collect(kind,p,c,now),parts=paginate(reportLines(report,c),c.messageLength);
   if(input.action==='preview')return {parts,report};
   const record=this.dispatch.prepare(report,c,true);await this.dispatch.send(record,c,now);return record;
  }
