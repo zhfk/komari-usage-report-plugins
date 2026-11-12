@@ -9,3 +9,4 @@ komari.local.json
 
 .browser-temp/
 .browser-runtime/
+__pycache__/
