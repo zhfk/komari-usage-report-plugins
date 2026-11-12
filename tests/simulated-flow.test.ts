@@ -16,19 +16,19 @@ class FakeSender implements Sender {
 async function run(store:MemoryStore,sender:FakeSender,now:number,type:'daily'|'weekly',snapshot:Snapshot){
  const zone='Asia/Shanghai', period=reportPeriod(now,zone,type);
  if(!due(now,zone,type==='daily'?'23:59':'09:00',type))return null;
- const text=renderReport(type,period.startDate,period.endDate,zone,snapshot);
+ const text=renderReport(type,period.startDate,period.endDate,zone,snapshot,period);
  return new Delivery(store,sender,()=>now).send(period.key,text);
 }
 const complete:Snapshot={nodeCount:2,upload:0,download:0,alerts:[],complete:true,pingAverage:30,uptimeRate:1};
-test('simulation: normal zero-traffic daily report is sent, with previous day and no duplicate after restart',async()=>{
+test('simulation: normal zero-traffic daily report covers today and does not duplicate after restart',async()=>{
  const store=new MemoryStore(),sender=new FakeSender(),now=Date.parse('2026-11-12T15:59:00Z');
  assert.equal((await run(store,sender,now,'daily',complete))?.status,'accepted');
- assert.match(sender.calls[0],/2026-11-11 至 2026-11-12/);assert.match(sender.calls[0],/未发现监控异常/);assert.match(sender.calls[0],/上传：0 B/);
+ assert.match(sender.calls[0],/2026-11-12 00:00 至 2026-11-12 23:59/);assert.match(sender.calls[0],/未发现监控异常/);assert.match(sender.calls[0],/上传：0 B/);
  await run(store,sender,now,'daily',complete);assert.equal(sender.calls.length,1);
 });
 test('simulation: normal weekly report is sent for previous Monday to Monday',async()=>{
  const store=new MemoryStore(),sender=new FakeSender(),now=Date.parse('2026-11-16T01:00:00Z');
- await run(store,sender,now,'weekly',complete);assert.equal(sender.calls.length,1);assert.match(sender.calls[0],/2026-11-09 至 2026-11-16/);assert.match(sender.calls[0],/未发现监控异常/);
+ await run(store,sender,now,'weekly',complete);assert.equal(sender.calls.length,1);assert.match(sender.calls[0],/2026-11-09 00:00 至 2026-11-16 00:00/);assert.match(sender.calls[0],/未发现监控异常/);
 });
 test('simulation: total data outage still sends a clearly uncertain report',async()=>{
  const store=new MemoryStore(),sender=new FakeSender(),now=Date.parse('2026-11-12T15:59:00Z');

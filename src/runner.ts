@@ -20,7 +20,7 @@ export class Runner {
    try{snapshot=await this.collector.collect(kind,period);}catch{
     snapshot={nodeCount:null,upload:null,download:null,pingAverage:null,uptimeRate:null,alerts:[],complete:false,note:'统计失败，监控数据不可用'};
    }
-   const text=renderReport(kind,period.startDate,period.endDate,config.timezone,snapshot);
+   const text=renderReport(kind,period.startDate,period.endDate,config.timezone,snapshot,period);
    result.push(await this.delivery.send(period.key,text));
   }
   return result;

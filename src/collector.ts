@@ -52,7 +52,9 @@ export class Collector {
  }
  async day(node:any,p:Period,c:Config,now:number):Promise<NodeReport>{
   const cache=`daily/${p.startDate}-${hash(JSON.stringify([scope(c),node.uuid,c.traffic,c.ping,c.pingSingleMs])).slice(0,20)}.json`;
-  const saved=this.storage.read<{generated:number;node:NodeReport}|null>(cache,null);
+  const full=historicalPeriod(p.startDate,c.timezone,'daily');
+  const cacheable=p.start===full.start&&p.end===full.end&&p.end<=now;
+  const saved=cacheable?this.storage.read<{generated:number;node:NodeReport}|null>(cache,null):null;
   if(saved && now-saved.generated<3600000)return saved.node;
   const created=Date.parse(node.created_at),start=Math.max(p.start,Number.isFinite(created)?created:p.start);
   const effective={...p,start};
@@ -63,7 +65,7 @@ export class Collector {
   let longest=0,run=0,count=0,lastEnd=-1;
   for(const x of intervals.sort((a,b)=>a.start-b.start)){if(x.state==='offline'){const a=Math.max(start,x.start),b=Math.min(p.end,x.end);if(a!==lastEnd){count++;run=0;}run+=b-a;longest=Math.max(longest,run);lastEnd=b;}else{run=0;lastEnd=-1;}}
   const n:NodeReport={uuid:node.uuid,name:safeText(node.name||node.uuid,200),created:Number.isFinite(created)?created:p.start,expired:Number.isFinite(Date.parse(node.expired_at))?Date.parse(node.expired_at):null,upload,download,ping,uptime:{online:u.online,offline:u.offline,unknown:u.unknown,rate:u.rate,longest,count},notes:['在线率及离线时长为每分钟观察估算；插件停机或观察间断计为未知。']};
-  this.storage.write(cache,{generated:now,node:n});return n;
+  if(cacheable)this.storage.write(cache,{generated:now,node:n});return n;
  }
  async collect(kind:Kind,p:Period,c:Config,now=Date.now()):Promise<Report>{
   const report:Report={kind,period:p,scope:scope(c),generated:now,nodes:[],events:[],notes:[],previousTotal:null,total:null,complete:false};
@@ -71,7 +73,7 @@ export class Collector {
    const nodes=(await this.nodes(c)).filter(n=>!Number.isFinite(Date.parse(n.created_at))||Date.parse(n.created_at)<p.end);if(!nodes.length)report.notes.push('没有符合配置的节点');
    // Process one node/day at a time; weekly results reuse daily aggregates.
    for(const node of nodes){const days:NodeReport[]=[];let date=p.startDate;
-    for(let i=0;i<(kind==='daily'?1:7);i++){const day=historicalPeriod(date,c.timezone,'daily');if(day.start>=p.end)break;days.push(await this.day(node,day,c,now));date=day.endDate;}
+    for(let i=0;i<(kind==='daily'?1:7);i++){const day=historicalPeriod(date,c.timezone,'daily');if(day.start>=p.end)break;days.push(await this.day(node,{...day,start:Math.max(day.start,p.start),end:Math.min(day.end,p.end)},c,now));date=day.endDate;}
     const first=days[0];if(!first)continue;const n:NodeReport=JSON.parse(JSON.stringify(first));
     if(days.length>1){
      for(const key of ['upload','download'] as const){const ms=days.map(d=>d[key]);n[key]={value:ms.every(x=>x.value!==null)?ms.reduce((a,b)=>a+b.value!,0):null,quality:ms.every(x=>x.quality==='complete')?'complete':'estimated',samples:ms.reduce((a,b)=>a+b.samples,0),coverage:ms.reduce((a,b)=>a+b.coverage,0)/days.length,note:'按日聚合汇总'};}
