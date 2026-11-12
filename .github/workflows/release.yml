@@ -1,0 +1,36 @@
+name: Test, package and release
+on:
+  push:
+    branches: [main]
+    paths: ['src/**', 'tests/**', 'scripts/**', 'pages/**', 'examples/**', 'package*.json', 'komari-plugin.json', '.github/workflows/release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run package
+      - name: Publish versioned prerelease with installable ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v${version}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; no published asset is overwritten."
+            exit 0
+          fi
+          gh release create "$tag" artifacts/*.zip artifacts/SHA256SUMS \
+            --target "$GITHUB_SHA" --title "Komari Daily & Weekly Reports $tag" \
+            --notes-file docs/release-notes.md --prerelease

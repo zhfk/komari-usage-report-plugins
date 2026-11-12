@@ -1,0 +1,6 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {configuration,defaults} from '../src/config.ts';import {historicalPeriod,duePeriods} from '../src/scheduler.ts';
+test('configuration rejects bad schedules, weak secrets and unbounded retention',()=>{for(const c of [{dailyTime:'25:00'},{timezone:12},{eventForwarding:true,eventSecret:'short'},{eventDays:1},{retries:1000},{messageLength:8000}])assert.throws(()=>configuration(c));assert.deepEqual(configuration({}),defaults);});
+test('catchup periods are calendar days, bounded and distinct over autumn DST',()=>{const p=duePeriods(Date.parse('2026-11-03T20:00:00Z'),'America/New_York','09:00','daily',1,4);assert.equal(p.length,5);assert.equal(new Set(p.map(x=>x.key)).size,5);assert.ok(p.some(x=>x.end-x.start===25*3600000));});
+test('DST missing midnight uses first instant of real calendar date',()=>{const p=historicalPeriod('2018-11-04','America/Sao_Paulo','daily');assert.equal((p.end-p.start)/3600000,23);});
+test('spring DST uses 23-hour day and week boundaries still Monday',()=>{const p=historicalPeriod('2026-03-08','America/New_York','daily');assert.equal((p.end-p.start)/3600000,23);const w=historicalPeriod('2026-11-11','Asia/Shanghai','weekly');assert.equal(w.startDate,'2026-11-09');assert.equal(w.endDate,'2026-11-16');});

@@ -4,7 +4,7 @@ export type Result<T> = { value: T | null; quality: 'complete' | 'partial' | 'un
 
 /** Counter deltas cannot be recovered across resets or missing boundaries. */
 export function counterUsage(samples: Sample[], start: number, end: number, maxGap: number): Result<number> {
-  if (!(Number.isFinite(start) && Number.isFinite(end) && start < end && maxGap > 0)) throw new Error('Invalid interval');
+  if (!(Number.isFinite(start) && Number.isFinite(end) && start < end && Number.isFinite(maxGap) && maxGap > 0)) throw new Error('Invalid interval');
   const valid = samples.filter(s => Number.isFinite(s.time) && Number.isFinite(s.value) && s.value >= 0 && s.time >= start && s.time <= end).sort((a,b) => a.time-b.time);
   const points: Sample[] = [];
   let duplicate = false;
@@ -27,10 +27,11 @@ export function counterUsage(samples: Sample[], start: number, end: number, maxG
 
 export function pingStats(values: number[], failures: number | null, threshold: number) {
   const v=values.filter(n=>Number.isFinite(n) && n>=0);
+  if (!Number.isFinite(threshold)||threshold<0) throw new Error('Invalid threshold');
   if (failures !== null && (!Number.isInteger(failures) || failures<0)) throw new Error('Invalid failure count');
   const attempts=failures===null?null:v.length+failures;
   return {samples:v.length, average:v.length?v.reduce((a,b)=>a+b,0)/v.length:null,
-    min:v.length?Math.min(...v):null, max:v.length?Math.max(...v):null,
+    min:v.length?v.reduce((a,b)=>Math.min(a,b),Infinity):null, max:v.length?v.reduce((a,b)=>Math.max(a,b),-Infinity):null,
     aboveThreshold:v.filter(n=>n>threshold).length, failures,
     lossRate:attempts ? failures! / attempts : null};
 }
@@ -40,6 +41,7 @@ export type StateInterval = { start:number; end:number; state:'online'|'offline'
 export function uptime(intervals: StateInterval[], start:number, end:number) {
   if (!(Number.isFinite(start) && Number.isFinite(end) && start<end)) throw new Error('Invalid interval');
   let online=0, offline=0, unknown=0, cursor=start;
+  if(intervals.some(x=>!Number.isFinite(x.start)||!Number.isFinite(x.end)||x.end<x.start||!['online','offline','unknown'].includes(x.state)))throw new Error('Invalid state interval');
   const clipped=intervals.map(x=>({...x,start:Math.max(start,x.start),end:Math.min(end,x.end)})).filter(x=>x.start<x.end).sort((a,b)=>a.start-b.start);
   for (const x of clipped) {
     if (!Number.isFinite(x.start) || !Number.isFinite(x.end) || !['online','offline','unknown'].includes(x.state)) throw new Error('Invalid state interval');

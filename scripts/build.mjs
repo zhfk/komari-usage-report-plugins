@@ -1,0 +1,14 @@
+import {build} from 'esbuild';
+import manifestHelpers from '../node_modules/@komari-monitor/plugin-sdk/src/manifest.js';
+import {readFileSync,writeFileSync,mkdirSync,copyFileSync,rmSync} from 'node:fs';
+rmSync('dist',{recursive:true,force:true});mkdirSync('dist/pages',{recursive:true});mkdirSync('dist/docs',{recursive:true});
+const manifest=JSON.parse(readFileSync('komari-plugin.json','utf8'));
+manifestHelpers.assertValidManifest(manifest);
+if(manifest.version!==JSON.parse(readFileSync('package.json','utf8')).version)throw Error('Package/manifest version mismatch');
+if(manifest.short!=='komari-daily-weekly-reports'||manifest.entry!=='script.js')throw Error('Invalid manifest');
+await build({entryPoints:['src/plugin.ts'],bundle:true,outfile:'dist/script.js',platform:'neutral',format:'iife',target:['es2020'],external:['server','fs','node:crypto','node:buffer'],footer:{js:'async function load(){ return globalThis.__komariReports.start(); }\nasync function unload(){ return globalThis.__komariReports.stop(); }'},legalComments:'none'});
+copyFileSync('komari-plugin.json','dist/komari-plugin.json');copyFileSync('pages/admin.html','dist/pages/admin.html');
+copyFileSync('README.md','dist/README.md');copyFileSync('examples/notification-forwarder.js','dist/notification-forwarder.js');
+for(const name of ['acceptance.md','compatibility.md','release-notes.md','test-results.md'])copyFileSync('docs/'+name,'dist/docs/'+name);
+copyFileSync('LICENSE','dist/LICENSE');
+console.log('Built dist/script.js and manifest');

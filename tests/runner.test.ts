@@ -1,0 +1,7 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {Runner} from '../src/runner.ts';import {Delivery,type DeliveryState} from '../src/delivery.ts';
+const config={timezone:'Asia/Shanghai',dailyEnabled:true,dailyTime:'23:59',weeklyEnabled:true,weeklyTime:'09:00',weeklyDay:1};
+function setup(fail=false){const data=new Map<string,DeliveryState>();const messages:string[]=[];const store={async get(k:string){return data.get(k)??null},async put(v:DeliveryState){data.set(v.key,{...v})}};const sender={async send(t:string){messages.push(t)}};const collector={async collect(){if(fail)throw Error('offline');return {nodeCount:1,upload:0,download:0,pingAverage:1,uptimeRate:1,alerts:[],complete:true}}};return {runner:new Runner(new Delivery(store,sender),collector),messages};}
+test('runner sends a scheduled report even with no events',async()=>{const {runner,messages}=setup();await runner.tick(Date.parse('2026-11-12T15:59:00Z'),config);assert.equal(messages.length,1);assert.match(messages[0],/未发现监控异常/);});
+test('runner reports failed collection instead of skipping delivery',async()=>{const {runner,messages}=setup(true);await runner.tick(Date.parse('2026-11-12T15:59:00Z'),config);assert.equal(messages.length,1);assert.match(messages[0],/统计失败/);assert.doesNotMatch(messages[0],/未发现监控异常/);});
+test('runner honors disabled reports',async()=>{const {runner,messages}=setup();await runner.tick(Date.parse('2026-11-12T15:59:00Z'),{...config,dailyEnabled:false});assert.equal(messages.length,0);});

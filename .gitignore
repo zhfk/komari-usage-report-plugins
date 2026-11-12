@@ -1,0 +1,11 @@
+node_modules/
+dist/
+artifacts/
+.komari-test-*/
+komari.local.json
+*.tmp
+
+.npm-cache/
+
+.browser-temp/
+.browser-runtime/

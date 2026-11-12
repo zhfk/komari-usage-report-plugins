@@ -1,0 +1,8 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {normalizeEvents} from '../src/events.ts';import {temp} from './support.ts';
+const now=Date.parse('2026-11-12T00:00:00Z');
+test('event types, snapshots, dedup and secret filtering',()=>{const t=temp();try{for(const type of ['Offline','Online','Alert','Expire','Renew','Test','FutureType']){const e=normalizeEvents({event:type,time:new Date(now-1000).toISOString(),message:'token=secret 1.2.3.4',clients:[{uuid:'n',name:'node',token:'DO_NOT_STORE'}]},now)[0];assert.equal(e.type,type==='FutureType'?'Unknown':type);assert.ok(t.store.event(e));assert.equal(t.store.event(e),false);assert.doesNotMatch(JSON.stringify(e),/DO_NOT_STORE|1\.2\.3\.4|token=secret/);}}finally{t.close();}});
+test('report events never feed back into captured alerts',()=>{for(const event of ['DailyReport','WeeklyReport','ReportFailure'])assert.deepEqual(normalizeEvents({event},now),[]);});
+test('future events are rejected',()=>{assert.throws(()=>normalizeEvents({event:'Alert',time:'2030-01-01T00:00:00Z'},now));});
+test('observations merge across midnight and restart gaps remain unknown',()=>{const t=temp();try{t.store.observe(now-60000,[{uuid:'n',state:'offline'}]);t.store.observe(now+60000,[{uuid:'n',state:'offline'}]);assert.equal(t.store.intervals(now-60000,now+60000).length,2);t.store.observe(now+600000,[{uuid:'n',state:'online'}]);assert.equal(t.store.intervals(now+60000,now+600000).length,0);}finally{t.close();}});
+test('storage refuses path traversal and unknown schema migration',()=>{const t=temp();try{assert.throws(()=>t.store.read('../outside',null));t.store.write('meta.json',{version:99});assert.throws(()=>t.store.migrate());}finally{t.close();}});

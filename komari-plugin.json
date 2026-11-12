@@ -1,0 +1,243 @@
+{
+  "name": {
+    "zh_CN": "Komari 日报与周报",
+    "en": "Komari Daily & Weekly Reports"
+  },
+  "short": "komari-daily-weekly-reports",
+  "description": "定时生成监控日报和周报；数据不足明确提示。Beta，真实环境验证待用户完成。",
+  "author": "zhfk",
+  "version": "0.1.0-beta.1",
+  "komari": ">=1.6.1",
+  "entry": "script.js",
+  "url": "https://github.com/zhfk/komari-usage-report-plugins",
+  "permissions": {
+    "node": true,
+    "allowSystemRPC": true,
+    "allowRoutes": true,
+    "timeout": 60,
+    "maxHTTPBodyBytes": 2097152
+  },
+  "configuration": {
+    "type": "managed",
+    "data": [
+      {
+        "key": "dailyEnabled",
+        "name": "启用日报",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "dailyTime",
+        "name": "日报时间",
+        "type": "string",
+        "default": "23:59"
+      },
+      {
+        "key": "weeklyEnabled",
+        "name": "启用周报",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "weeklyDay",
+        "name": "周报星期（0=周日，1=周一）",
+        "type": "number",
+        "default": 1
+      },
+      {
+        "key": "weeklyTime",
+        "name": "周报时间",
+        "type": "string",
+        "default": "09:00"
+      },
+      {
+        "key": "timezone",
+        "name": "报告时区",
+        "type": "string",
+        "default": "Asia/Shanghai"
+      },
+      {
+        "key": "nodeIds",
+        "name": "参与节点 UUID（空为全部，逗号分隔）",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "key": "includeHidden",
+        "name": "包含隐藏节点",
+        "type": "switch",
+        "default": false
+      },
+      {
+        "key": "traffic",
+        "name": "显示流量",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "ping",
+        "name": "显示延迟",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "uptime",
+        "name": "显示在线率",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "offline",
+        "name": "显示上下线事件",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "cpu",
+        "name": "显示CPU 告警",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "memory",
+        "name": "显示内存告警",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "disk",
+        "name": "显示磁盘告警",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "load",
+        "name": "显示负载告警",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "expiry",
+        "name": "显示到期事件",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "renewal",
+        "name": "显示续费事件",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "comparison",
+        "name": "显示周期对比",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "rankings",
+        "name": "显示周报排名",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "summary",
+        "name": "显示运行总结",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "eventDays",
+        "name": "事件与在线观察保留天数（90–730）",
+        "type": "number",
+        "default": 180
+      },
+      {
+        "key": "reportDays",
+        "name": "日报聚合与发送记录保留天数（14–730）",
+        "type": "number",
+        "default": 180
+      },
+      {
+        "key": "maxEvents",
+        "name": "报告最多展示事件数",
+        "type": "number",
+        "default": 50
+      },
+      {
+        "key": "retries",
+        "name": "安全失败最大重试次数",
+        "type": "number",
+        "default": 3
+      },
+      {
+        "key": "retrySeconds",
+        "name": "重试基础间隔（秒）",
+        "type": "number",
+        "default": 60
+      },
+      {
+        "key": "catchupDays",
+        "name": "自动追补天数（0–31，每分钟最多两份）",
+        "type": "number",
+        "default": 3
+      },
+      {
+        "key": "pingAverageMs",
+        "name": "平均延迟警告阈值（ms）",
+        "type": "number",
+        "default": 200
+      },
+      {
+        "key": "pingSingleMs",
+        "name": "单次延迟告警阈值（ms）",
+        "type": "number",
+        "default": 300
+      },
+      {
+        "key": "pingLossPercent",
+        "name": "丢包率警告阈值（%）",
+        "type": "number",
+        "default": 5
+      },
+      {
+        "key": "completeness",
+        "name": "显示数据完整性说明",
+        "type": "switch",
+        "default": true
+      },
+      {
+        "key": "sort",
+        "name": "节点排序（name / traffic / uptime）",
+        "type": "string",
+        "default": "name"
+      },
+      {
+        "key": "messageLength",
+        "name": "每段消息字符预算（512–3500）",
+        "type": "number",
+        "default": 2800
+      },
+      {
+        "key": "eventSecret",
+        "name": "事件转发共享密钥（至少 32 位，请勿公开）",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "key": "eventForwarding",
+        "name": "已安装并启用事件转发脚本",
+        "type": "switch",
+        "default": false
+      }
+    ]
+  },
+  "pages": [
+    {
+      "file": "pages/admin.html",
+      "title": "监控日报与周报",
+      "type": "iframe",
+      "visibility": "admin"
+    }
+  ]
+}
