@@ -39,7 +39,7 @@ jobs:
           name: configuration-ui-browser
           path: artifacts/browser/
           if-no-files-found: ignore
-      - name: Publish versioned prerelease with installable ZIP
+      - name: Publish versioned release with installable ZIP
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,6 +51,10 @@ jobs:
             echo "Release $tag already exists; no published asset is overwritten."
             exit 0
           fi
-          gh release create "$tag" artifacts/*.zip artifacts/SHA256SUMS \
-            --target "$GITHUB_SHA" --title "Komari Daily & Weekly Reports $tag" \
-            --notes-file docs/release-notes.md --prerelease
+          release_args=(--target "$GITHUB_SHA" --title "Komari Daily & Weekly Reports $tag" --notes-file docs/release-notes.md)
+          if [[ "$version" == *-* ]]; then
+            release_args+=(--prerelease)
+          else
+            release_args+=(--latest)
+          fi
+          gh release create "$tag" artifacts/*.zip artifacts/SHA256SUMS "${release_args[@]}"
